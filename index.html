@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ksylofoni – kaksi oktaavia, laululista</title>
+<style>
+:root {
+  --white-key-height:140px;
+  --black-key-height:90px;
+  --key-gap:6px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+}
+html,body{height:100%;margin:0;font-family:var(--font);background:#faf7f3;}
+.app{display:flex;flex-direction:column;gap:16px;padding:16px;max-width:1000px;margin:0 auto;}
+h1{font-size:1.2rem;margin:0;}
+.xylophone{position:relative;display:flex;align-items:end;justify-content:center;touch-action:none;flex-wrap:nowrap;}
+.key{position:relative;flex:0 0 55px;border-radius:10px;margin:0 var(--key-gap);user-select:none;touch-action:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;}
+.white{background:linear-gradient(#fff5dd,#f1c27d);box-shadow:0 6px 12px rgba(0,0,0,0.2);height:var(--white-key-height);z-index:1;}
+.black{background:linear-gradient(#333,#111);color:#fff;height:var(--black-key-height);width:36px;z-index:2;position:absolute;top:0;transform:translateX(20px);}
+.note-letter{font-weight:700;font-size:2.2rem;pointer-events:none;margin-bottom:6px;}
+.note-oct{font-size:0.8rem;opacity:0.6;pointer-events:none;margin-bottom:4px;}
+.key.highlight{outline:4px solid rgba(60,160,255,0.5);transform:translateY(-6px);}
+.key.correct{background:linear-gradient(#c8ffc8,#90ee90);}
+.controls{display:flex;flex-direction:column;gap:8px;}
+textarea#melody{width:100%;min-height:64px;padding:8px;font-size:2rem;}
+button{padding:10px 14px;font-size:0.75rem;border-radius:8px;border:0;background:#2b7be9;color:#fff;}
+.song-lists{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;}
+.song-list{flex:1;min-width:220px;}
+.song-list h3{margin:0 0 4px 0;}
+.song-list ul{list-style:none;padding:0;margin:0;}
+.song-list li{cursor:pointer;padding:4px 0;color:#2b7be9;}
+.song-list li:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Ksylofoni – kaksi oktaavia ja laululista</h1>
+<div class="xylophone" id="xylophone"></div>
+
+<div class="controls">
+<label for="melody">Sävelmä:</label>
+<textarea id="melody"></textarea>
+<div style="display:flex;align-items:center;gap:12px">
+<button id="startBtn">Aloita</button>
+<button id="stopBtn" style="background:#777">Lopeta</button>
+<button id="autoBtn" style="background:#4caf50">Soita automaattisesti</button>
+<span>Seuraava: <span id="nextNote">—</span></span>
+</div>
+</div>
+
+<div class="song-lists">
+<div class="song-list" id="kidsList">
+<h3>Lastenlaulut</h3><ul></ul>
+</div>
+<div class="song-list" id="popList">
+<h3>Pop-laulut</h3><ul></ul>
+</div>
+</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  var xylophone = document.getElementById('xylophone');
+  var keyElements = {};
+  var baseOctaves = [4,5];
+  var whiteNotes = ['C','D','E','F','G','A','B'];
+  var blackLayout = {'C':'C#','D':'D#','F':'F#','G':'G#','A':'A#'};
+
+  // Luo valkoiset koskettimet
+  baseOctaves.forEach(function(oct){
+    whiteNotes.forEach(function(letter){
+      var key = document.createElement('div');
+      key.className = 'key white';
+      key.dataset.note = letter;
+      key.dataset.octave = oct;
+      key.innerHTML = '<div class="note-letter">'+letter+'</div><div class="note-oct">'+oct+'</div>';
+      xylophone.appendChild(key);
+      keyElements[letter+oct] = key;
+    });
+  });
+
+  // Luo mustat koskettimet
+  baseOctaves.forEach(function(oct){
+    var whites = Array.from(xylophone.querySelectorAll('.white[data-octave="'+oct+'"]'));
+    whites.forEach(function(whiteKey){
+      var letter = whiteKey.dataset.note;
+      var blackName = blackLayout[letter];
+      if(blackName){
+        var black = document.createElement('div');
+        black.className = 'key black';
+        black.dataset.note = blackName;
+        black.dataset.octave = oct;
+        black.innerHTML = '<div class="note-letter">'+blackName+'</div><div class="note-oct">'+oct+'</div>';
+        whiteKey.appendChild(black);
+        keyElements[blackName+oct] = black;
+      }
+    });
+  });
+
+  function noteFreq(note,oct){
+    var letters = {'C':-9,'C#':-8,'D':-7,'D#':-6,'E':-5,'F':-4,'F#':-3,'G':-2,'G#':-1,'A':0,'A#':1,'B':2};
+    return 440*Math.pow(2,(letters[note]+(oct-4)*12)/12);
+  }
+
+  function playXylophoneTone(freq){
+    var now = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(1, now+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now+0.5);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now+0.5);
+  }
+
+  var lessonSeq=[],lessonIndex=0,awaitingPress=false;
+  var nextNoteEl = document.getElementById('nextNote');
+
+  function highlightKey(note,oct){
+    clearHighlights();
+    var el = keyElements[note+oct];
+    if(el){ el.classList.add('highlight'); }
+  }
+
+  function clearHighlights(){
+    Object.values(keyElements).forEach(function(k){k.classList.remove('highlight','correct');});
+  }
+
+  function parseMelody(text){
+    var tokens = text.replace(/,/g,' ').trim().split(/\s+/).filter(Boolean);
+    var seq = [];
+    tokens.forEach(function(t){
+      var m = t.match(/^([A-Ga-g](?:#)?)([0-9])?$/);
+      if(m){ seq.push({note:m[1].toUpperCase(),octave:m[2]?parseInt(m[2]):4}); }
+    });
+    return seq;
+  }
+
+  function startLesson(){
+    var text = document.getElementById('melody').value;
+    lessonSeq = parseMelody(text);
+    if(!lessonSeq.length){ alert('Anna sävelmä.'); return; }
+    lessonIndex = 0;
+    nextStep();
+  }
+
+  function stopLesson(){
+    lessonSeq=[]; lessonIndex=0; awaitingPress=false; nextNoteEl.textContent='—'; clearHighlights();
+  }
+
+  function nextStep(){
+    if(lessonIndex>=lessonSeq.length){ nextNoteEl.textContent='Valmis!'; clearHighlights(); awaitingPress=false; return; }
+    var t = lessonSeq[lessonIndex];
+    nextNoteEl.textContent = t.note+t.octave;
+    highlightKey(t.note,t.octave);
+    awaitingPress = true;
+  }
+
+  function handleKeyPress(note,oct){
+    var el = keyElements[note+oct];
+    if(!el) return;
+    el.classList.add('correct');
+    setTimeout(function(){ el.classList.remove('correct'); },200);
+    playXylophoneTone(noteFreq(note,oct));
+    if(awaitingPress){
+      var target = lessonSeq[lessonIndex];
+      if(target && target.note===note && target.octave===oct){ lessonIndex++; awaitingPress=false; setTimeout(nextStep,250); }
+    }
+  }
+
+  Object.values(keyElements).forEach(function(k){
+    k.addEventListener('pointerdown', function(e){
+      e.preventDefault();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      handleKeyPress(k.dataset.note,parseInt(k.dataset.octave));
+    });
+  });
+
+  window.addEventListener('keydown',function(e){
+    var key = e.key.toUpperCase();
+    if(/[A-G]/.test(key)){ if(audioCtx.state==='suspended') audioCtx.resume(); handleKeyPress(key,4); }
+  });
+
+  document.getElementById('startBtn').addEventListener('click', function(){ if(audioCtx.state==='suspended') audioCtx.resume(); startLesson(); });
+  document.getElementById('stopBtn').addEventListener('click', stopLesson);
+
+  var kidsSongs=[
+    {name:'Tuiki tuiki tähtönen',notes:'C C G G A A G'},
+    {name:'Piippolan vaarilla',notes:'G G A G C B'},
+    {name:'Pieni karhu',notes:'C C D E E D C'},
+    {name:'Hattara',notes:'E D C D E E E'},
+    {name:'Ukki aukki',notes:'G A G F E D C'},
+    {name:'Leijonakuningas',notes:'C D E F G'},
+    {name:'Satujen maa',notes:'C E G C E G'},
+    {name:'Ritari Reki',notes:'G G F E D C'},
+    {name:'Kultakutri',notes:'C C D E F E D'},
+    {name:'Hiiri hiiri',notes:'E E F G G F E'}
+  ];
+
+  var popSongs=[
+    {name:'Let It Be',notes:'C C G A F E D C'},
+    {name:'Shape of You',notes:'E E G A B C D E'},
+    {name:'Happy',notes:'C C D E F G A B'},
+    {name:'Someone Like You',notes:'A B C D E F G A'},
+    {name:'Rolling in the Deep',notes:'G G A B C D E'},
+    {name:'Bad Guy',notes:'C D E F G A B C'},
+    {name:'Blinding Lights',notes:'E F G A B C D E'},
+    {name:'Dance Monkey',notes:'C C D E F G A B'},
+    {name:'Shallow',notes:'G A B C D E F G'},
+    {name:'Perfect',notes:'C D E F G A B C'}
+  ];
+
+  function populateSongList(){
+    var kidsUl = document.querySelector('#kidsList ul');
+    kidsSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = s.notes; });
+      kidsUl.appendChild(li);
+    });
+    var popUl = document.querySelector('#popList ul');
+    popSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = s.notes; });
+      popUl.appendChild(li);
+    });
+  }
+  populateSongList();
+
+  // Automaattinen soitto
+  document.getElementById('autoBtn').addEventListener('click', async function(){
+    var seq = parseMelody(document.getElementById('melody').value);
+    for(var i=0;i<seq.length;i++){
+      var noteObj = seq[i];
+      highlightKey(noteObj.note,noteObj.octave);
+      playXylophoneTone(noteFreq(noteObj.note,noteObj.octave));
+      await new Promise(function(r){ setTimeout(r,500); });
+    }
+    clearHighlights();
+  });
+
+});
+</script>
+</body>
+</html>

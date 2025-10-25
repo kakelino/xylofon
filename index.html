@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ksylofoni — xyo11 (ääniväri + 30 nuottia)</title>
+<style>
+:root{
+  --white-key-height:140px;
+  --black-key-height:90px;
+  --key-gap:6px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+}
+html,body{height:100%;margin:0;font-family:var(--font);background:#faf7f3;}
+.app{max-width:1100px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+h1{margin:0 0 6px 0;font-size:1.2rem;}
+.xylophone{display:flex;align-items:end;justify-content:center;touch-action:none;gap:var(--key-gap);position:relative;overflow:auto;padding-bottom:8px;}
+.key{position:relative;flex:0 0 56px;border-radius:10px;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;cursor:pointer;user-select:none;padding-bottom:6px;}
+.white{background:linear-gradient(#fff5dd,#f1c27d);height:var(--white-key-height);box-shadow:0 6px 12px rgba(0,0,0,0.18);z-index:1;min-width:56px;}
+.black{background:linear-gradient(#333,#111);color:#fff;height:var(--black-key-height);width:38px;position:absolute;top:0;z-index:3;border-radius:6px;}
+.note-letter{font-weight:700;font-size:2.2rem;pointer-events:none;margin-bottom:6px;}
+.note-oct{font-size:0.85rem;opacity:0.6;pointer-events:none;margin-bottom:4px;}
+.key.highlight{outline:4px solid rgba(60,160,255,0.45);transform:translateY(-6px);}
+.key.correct{background:linear-gradient(#c8ffc8,#90ee90);}
+.key.auto{background:linear-gradient(#ffd380,#ffa500);}
+.controls{display:flex;flex-direction:column;gap:8px;}
+textarea#melody{width:100%;min-height:64px;padding:8px;font-size:2rem;box-sizing:border-box;}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+input,select,button{padding:6px 10px;border-radius:6px;border:1px solid #cfcfcf;font-size:0.9rem;}
+button{background:#2b7be9;color:#fff;border:none;cursor:pointer;}
+button.secondary{background:#777;color:#fff;}
+.song-lists{display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;}
+.song-list{flex:1;min-width:220px;}
+.song-list h3{margin:0 0 6px 0;}
+.song-list ul{list-style:none;padding:0;margin:0;}
+.song-list li{padding:6px 0;color:#2b7be9;cursor:pointer;}
+.song-list li:hover{text-decoration:underline;}
+.add-song{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+small.hint{color:#555}
+@media (max-width:720px){
+  .note-letter{font-size:1.6rem;}
+  .xylophone{overflow-x:auto;padding-bottom:6px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Ksylofoni — laajennettu (xyo11)</h1>
+
+  <div id="xylophone" class="xylophone" aria-label="ksylofoni"></div>
+
+  <div class="controls">
+    <label for="melody">Sävelmä (nuottikirjaimet):</label>
+    <textarea id="melody" placeholder="Valitse laulu listasta tai kirjoita nuotit, esim. C D E F G A B"></textarea>
+
+    <div class="row">
+      <button id="startBtn">Aloita</button>
+      <button id="stopBtn" class="secondary">Lopeta</button>
+      <button id="autoBtn" style="background:#4caf50">Soita automaattisesti</button>
+
+      <label for="soundSelect"><small class="hint">Ääniväri:</small></label>
+      <select id="soundSelect" aria-label="Ääniväri">
+        <option value="triangle">Kellomainen (triangle)</option>
+        <option value="sine">Puinen (sine)</option>
+        <option value="square">Marimba (square)</option>
+        <option value="sawtooth">Metallinen (sawtooth)</option>
+      </select>
+
+      <span style="margin-left:8px">Seuraava: <strong id="nextNote">—</strong></span>
+    </div>
+
+    <div class="add-song" style="margin-top:8px">
+      <select id="songCategory">
+        <option value="kids">Lastenlaulu</option>
+        <option value="pop">Pop-laulu</option>
+      </select>
+      <input id="newSongName" placeholder="Laulun nimi">
+      <input id="newSongNotes" placeholder="Nuotit esim. C D E F ...">
+      <button id="addSongBtn">Lisää laulu</button>
+    </div>
+  </div>
+
+  <div class="song-lists">
+    <div class="song-list" id="kidsList">
+      <h3>Lastenlaulut</h3>
+      <ul></ul>
+    </div>
+    <div class="song-list" id="popList">
+      <h3>Pop-laulut</h3>
+      <ul></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+/* koko logiikka käynnistyy DOMContentLoadedissa */
+document.addEventListener('DOMContentLoaded', function(){
+
+  // Audio & sointiväri (määritellään ennen playTone)
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var currentWave = 'triangle'; // oletus
+  document.getElementById('soundSelect').addEventListener('change', function(e){
+    currentWave = e.target.value;
+  });
+
+  // Perustiedot koskettimista
+  var xylophone = document.getElementById('xylophone');
+  var keyElements = {}; // kartoitus esim. keyElements['C4'] -> element
+  var baseOctaves = [4,5];
+  var whiteNotes = ['C','D','E','F','G','A','B'];
+  var blackLayout = {'C':'C#','D':'D#','F':'F#','G':'G#','A':'A#'};
+
+  // Luo valkoiset koskettimet (mukana oktaavi-indikaattori datasetissa)
+  baseOctaves.forEach(function(oct){
+    whiteNotes.forEach(function(letter){
+      var key = document.createElement('div');
+      key.className = 'key white';
+      key.dataset.note = letter;
+      key.dataset.octave = oct;
+      // Näytetään sävel ja oktaavi
+      key.innerHTML = '<div class="note-letter">'+letter+'</div><div class="note-oct">'+oct+'</div>';
+      xylophone.appendChild(key);
+      keyElements[letter + oct] = key;
+    });
+  });
+
+  // Luo mustat koskettimet sijoitettuna valkoisten päälle
+  baseOctaves.forEach(function(oct){
+    var whites = Array.from(xylophone.querySelectorAll('.white[data-octave="'+oct+'"]'));
+    whites.forEach(function(whiteKey, idx){
+      var letter = whiteKey.dataset.note;
+      var blackName = blackLayout[letter];
+      if(blackName){
+        var black = document.createElement('div');
+        black.className = 'key black';
+        black.dataset.note = blackName;
+        black.dataset.octave = oct;
+        black.innerHTML = '<div class="note-letter">'+blackName+'</div><div class="note-oct">'+oct+'</div>';
+        // sijoita musta hieman oikealle valkoiseen nähden
+        // aseta position absolute ja transform on CSS:ssä; appendataan valkoisen sisään
+        whiteKey.appendChild(black);
+        keyElements[blackName + oct] = black;
+      }
+    });
+  });
+
+  // Taajuuslaskenta (A4=440)
+  function freq(note, oct){
+    var map = {'C':-9,'C#':-8,'D':-7,'D#':-6,'E':-5,'F':-4,'F#':-3,'G':-2,'G#':-1,'A':0,'A#':1,'B':2};
+    if(!map.hasOwnProperty(note)) return NaN;
+    return 440 * Math.pow(2, (map[note] + (oct-4)*12) / 12);
+  }
+
+  // Soittofunktio — käyttää currentWave; tarkistaa ettei taajuus ole NaN
+  function playTone(f){
+    if(!isFinite(f) || f <= 0) return;
+    var o = audioCtx.createOscillator();
+    var g = audioCtx.createGain();
+    try {
+      o.type = currentWave || 'triangle';
+    } catch(e){
+      o.type = 'triangle';
+    }
+    o.frequency.setValueAtTime(f, audioCtx.currentTime);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(1, audioCtx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.45);
+  }
+
+  // Opetustoiminto: käsittelee sävelmän nuottijonon
+  var lessonSeq = [], lessonIndex = 0, awaitingPress = false;
+  var nextNoteEl = document.getElementById('nextNote');
+
+  function clearHighlights(){
+    Object.values(keyElements).forEach(function(k){
+      k.classList.remove('highlight','correct','auto');
+    });
+  }
+
+  // Parse: muokkaa niin että tuloksena vähintään 30 nuottia (toistaa)
+  function parseMelody(text){
+    if(!text) return [];
+    var tokens = text.replace(/,/g,' ').trim().split(/\s+/).filter(Boolean);
+    if(tokens.length === 0) return [];
+    // Toistetaan että tulee 30
+    while(tokens.length < 30){
+      tokens = tokens.concat(tokens.slice(0, 30 - tokens.length));
+    }
+    tokens = tokens.slice(0, 30);
+    var seq = [];
+    tokens.forEach(function(tok){
+      var m = tok.match(/^([A-Ga-g](?:#)?)([0-9])?$/);
+      if(m){
+        var note = m[1].toUpperCase();
+        var oct = m[2] ? parseInt(m[2]) : 4;
+        seq.push({note: note, octave: oct});
+      }
+    });
+    return seq;
+  }
+
+  function startLesson(){
+    var text = document.getElementById('melody').value;
+    lessonSeq = parseMelody(text);
+    if(!lessonSeq.length){ alert('Anna sävelmä (nuottikirjaimet).'); return; }
+    lessonIndex = 0;
+    nextStep();
+  }
+
+  function stopLesson(){
+    lessonSeq = []; lessonIndex = 0; awaitingPress = false; nextNoteEl.textContent = '—'; clearHighlights();
+  }
+
+  function nextStep(){
+    if(lessonIndex >= lessonSeq.length){
+      nextNoteEl.textContent = 'Valmis!';
+      clearHighlights();
+      awaitingPress = false;
+      return;
+    }
+    var t = lessonSeq[lessonIndex];
+    nextNoteEl.textContent = t.note + t.octave;
+    clearHighlights();
+    var el = keyElements[t.note + t.octave];
+    if(el) el.classList.add('highlight');
+    awaitingPress = true;
+  }
+
+  function handleKeyPress(note, octave){
+    var el = keyElements[note + octave];
+    if(!el) return;
+    el.classList.add('correct');
+    setTimeout(function(){ el.classList.remove('correct'); }, 180);
+    var f = freq(note, octave);
+    playTone(f);
+    if(awaitingPress){
+      var target = lessonSeq[lessonIndex];
+      if(target && target.note === note && target.octave === octave){
+        lessonIndex++;
+        awaitingPress = false;
+        setTimeout(nextStep, 220);
+      } else {
+        // väärä, pidä highlight paikallaan (tai pienen tärähdyksen voi lisätä)
+        var targetEl = keyElements[target.note + target.octave];
+        if(targetEl){
+          targetEl.animate([{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:250});
+        }
+      }
+    }
+  }
+
+  // Liitä tapahtumat koskettimiin (pointerdown kattaa touch + mouse)
+  Object.values(keyElements).forEach(function(k){
+    k.addEventListener('pointerdown', function(e){
+      e.preventDefault();
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      handleKeyPress(k.dataset.note, parseInt(k.dataset.octave));
+    });
+  });
+
+  // näppäimistötuki A-G (oletusoktaavi 4)
+  window.addEventListener('keydown', function(e){
+    var k = e.key.toUpperCase();
+    if(/[A-G]/.test(k)){
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      handleKeyPress(k, 4);
+    }
+  });
+
+  // painikkeet
+  document.getElementById('startBtn').addEventListener('click', function(){
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    startLesson();
+  });
+  document.getElementById('stopBtn').addEventListener('click', function(){ stopLesson(); });
+
+  // Laululistat (alkuperäiset)
+  var kidsSongs = [
+    {name:'Tuiki tuiki tähtönen', notes:'C C G G A A G'},
+    {name:'Piippolan vaarilla', notes:'G G A G C B'},
+    {name:'Pieni karhu', notes:'C C D E E D C'},
+    {name:'Hattara', notes:'E D C D E E E'},
+    {name:'Ukki aukki', notes:'G A G F E D C'},
+    {name:'Leijonakuningas', notes:'C D E F G'},
+    {name:'Satujen maa', notes:'C E G C E G'},
+    {name:'Ritari Reki', notes:'G G F E D C'},
+    {name:'Kultakutri', notes:'C C D E F E D'},
+    {name:'Hiiri hiiri', notes:'E E F G G F E'}
+  ];
+  var popSongs = [
+    {name:'Let It Be', notes:'C C G A F E D C'},
+    {name:'Shape of You', notes:'E E G A B C D E'},
+    {name:'Happy', notes:'C C D E F G A B'},
+    {name:'Someone Like You', notes:'A B C D E F G A'},
+    {name:'Rolling in the Deep', notes:'G G A B C D E'},
+    {name:'Bad Guy', notes:'C D E F G A B C'},
+    {name:'Blinding Lights', notes:'E F G A B C D E'},
+    {name:'Dance Monkey', notes:'C C D E F G A B'},
+    {name:'Shallow', notes:'G A B C D E F G'},
+    {name:'Perfect', notes:'C D E F G A B C'}
+  ];
+
+  // Automaattisoiton toteutus: varmistetaan audioCtx.resume()
+  document.getElementById('autoBtn').addEventListener('click', async function(){
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+    var seq = parseMelody(document.getElementById('melody').value);
+    if(!seq.length){ alert('Anna sävelmä ennen automaattisoittoa.'); return; }
+    clearHighlights();
+    for(var i=0;i<seq.length;i++){
+      var n = seq[i];
+      var el = keyElements[n.note + n.octave];
+      if(el) el.classList.add('auto');
+      var f = freq(n.note, n.octave);
+      if(isFinite(f) && f > 0) playTone(f);
+      await new Promise(function(r){ setTimeout(r, 520); }); // pieni tauko
+      if(el) el.classList.remove('auto');
+    }
+    clearHighlights();
+  });
+
+  // Täytä laululistat ja liitä valinta -> sävelmäkenttä (loopataan 30 nuottiin)
+  function loopTo30(str){
+    var arr = str.replace(/,/g,' ').trim().split(/\s+/).filter(Boolean);
+    if(arr.length === 0) return '';
+    while(arr.length < 30) arr = arr.concat(arr.slice(0, 30 - arr.length));
+    return arr.slice(0,30).join(' ');
+  }
+
+  function populateLists(){
+    var kidsUl = document.querySelector('#kidsList ul');
+    var popUl = document.querySelector('#popList ul');
+    kidsUl.innerHTML = ''; popUl.innerHTML = '';
+    kidsSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = loopTo30(s.notes); });
+      kidsUl.appendChild(li);
+    });
+    popSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = loopTo30(s.notes); });
+      popUl.appendChild(li);
+    });
+  }
+  populateLists();
+
+  // Lisää uusi laulu (valittu kategoria)
+  document.getElementById('addSongBtn').addEventListener('click', function(){
+    var name = document.getElementById('newSongName').value.trim();
+    var notes = document.getElementById('newSongNotes').value.trim();
+    var cat = document.getElementById('songCategory').value;
+    if(!name || !notes){ alert('Anna sekä nimi että nuotit.'); return; }
+    var entry = {name: name, notes: notes};
+    if(cat === 'kids') kidsSongs.push(entry); else popSongs.push(entry);
+    populateLists();
+    document.getElementById('newSongName').value = '';
+    document.getElementById('newSongNotes').value = '';
+  });
+
+  // Lopuksi: varmista että kaikki napit ja koskettimet toimivat (koska keyElements on valmis)
+  // Liitännät tosiaan tehtiin heti kun elementit olivat luodut yllä.
+  // (Lisätapaus: jos haluat että mustat koskettimet ovat visuaalisesti paremmin keskellä, CSS:ssä voi hienosäätää transform-arvoa.)
+});
+</script>
+</body>
+</html>

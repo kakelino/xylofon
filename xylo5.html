@@ -1,232 +1,424 @@
-<!DOCTYPE html>
-<html lang="fi"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ksylofoni – kaksi oktaavia, laululista</title>
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ksylofoni — xyo12 (3 oktaavia, nuoli)</title>
 <style>
-:root {
+:root{
   --white-key-height:140px;
-  --black-key-height:90px;
+  --black-key-height:92px;
+  --key-width:64px;
+  --black-width:40px;
   --key-gap:6px;
   --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+  --bg:#fbf7f2;
+  --accent:#2b7be9;
 }
-html,body{height:100%;margin:0;font-family:var(--font);background:#faf7f3;}
-.app{display:flex;flex-direction:column;gap:16px;padding:16px;max-width:1000px;margin:0 auto;}
-h1{font-size:1.2rem;margin:0;}
-.xylophone{position:relative;display:flex;align-items:end;justify-content:center;touch-action:none;flex-wrap:nowrap;}
-.key{position:relative;flex:0 0 55px;border-radius:10px;margin:0 var(--key-gap);user-select:none;touch-action:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;}
-.white{background:linear-gradient(#fff5dd,#f1c27d);box-shadow:0 6px 12px rgba(0,0,0,0.2);height:var(--white-key-height);z-index:1;}
-.black{background:linear-gradient(#333,#111);color:#fff;height:var(--black-key-height);width:36px;z-index:2;position:absolute;top:0;transform:translateX(20px);}
-.note-letter{font-weight:700;font-size:1.6rem;pointer-events:none;margin-bottom:6px;}
-.note-oct{font-size:0.8rem;opacity:0.6;pointer-events:none;margin-bottom:4px;}
-.key.highlight{outline:4px solid rgba(60,160,255,0.5);transform:translateY(-6px);}
-.key.correct{background:linear-gradient(#c8ffc8,#90ee90);}
-.controls{display:flex;flex-direction:column;gap:8px;}
-textarea#melody{width:100%;min-height:64px;padding:8px;font-size:2rem;}
-button{padding:10px 14px;font-size:0.75rem;border-radius:8px;border:0;background:#2b7be9;color:#fff;}
-.song-lists{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;}
-.song-list{flex:1;min-width:220px;}
-.song-list h3{margin:0 0 4px 0;}
-.song-list ul{list-style:none;padding:0;margin:0;}
-.song-list li{cursor:pointer;padding:4px 0;color:#2b7be9;}
-.song-list li:hover{text-decoration:underline;}
+html,body{height:100%;margin:0;font-family:var(--font);background:var(--bg);color:#222}
+.app{max-width:1200px;margin:12px auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+h1{margin:0;font-size:1.2rem}
+.xyl-wrap{position:relative;overflow:auto;padding-bottom:28px;border-radius:12px;}
+.xylophone{display:flex;align-items:end;gap:var(--key-gap);padding:12px 8px;min-width:100%;}
+.key{position:relative;flex:0 0 var(--key-width);min-width:var(--key-width);height:var(--white-key-height);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;user-select:none;box-sizing:border-box;}
+.white{background:linear-gradient(#fffaf0,#f2d7a6);box-shadow:0 6px 12px rgba(0,0,0,0.12);z-index:1;border:1px solid rgba(0,0,0,0.06);}
+.black{position:absolute;top:0;height:var(--black-key-height);width:var(--black-width);background:linear-gradient(#222,#000);color:#fff;border-radius:6px;z-index:3;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:0.9rem;box-shadow:0 6px 10px rgba(0,0,0,0.35);}
+.note-letter{font-weight:700;font-size:1.4rem;pointer-events:none;margin-bottom:6px}
+.note-oct{font-size:0.75rem;opacity:0.65;pointer-events:none;margin-bottom:4px}
+.key.highlight{outline:4px solid rgba(60,160,255,0.45);transform:translateY(-6px)}
+.key.correct{background:linear-gradient(#c8ffc8,#90ee90)}
+.key.auto{background:linear-gradient(#ffd380,#ffa500)}
+.controls{display:flex;flex-direction:column;gap:8px}
+textarea#melody{width:100%;min-height:64px;padding:8px;font-size:1.9rem;box-sizing:border-box;border-radius:8px;border:1px solid #ddd;background:#fff}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+input,select,button{padding:8px 10px;border-radius:8px;border:1px solid #d0d0d0;font-size:0.95rem}
+button{background:var(--accent);color:white;border:none;cursor:pointer}
+button.secondary{background:#777}
+.song-lists{display:flex;gap:20px;flex-wrap:wrap;margin-top:8px}
+.song-list{flex:1;min-width:220px}
+.song-list h3{margin:0 0 6px 0}
+.song-list ul{list-style:none;padding:0;margin:0}
+.song-list li{padding:6px 0;color:var(--accent);cursor:pointer}
+.song-list li:hover{text-decoration:underline}
+.add-song{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+small.hint{color:#555;font-size:0.9rem}
+
+/* Arrow under key */
+#nextArrow{
+  position:absolute;
+  width:0;height:0;
+  border-left:12px solid transparent;
+  border-right:12px solid transparent;
+  border-top:16px solid #e33; /* red arrow pointing up (we place it below key) */
+  pointer-events:none;
+  transition: left 0.12s ease, top 0.12s ease, opacity 0.12s;
+  opacity:0;
+  z-index:1000;
+}
+
+/* responsive */
+@media (max-width:800px){
+  :root{--key-width:48px;--white-key-height:110px;--black-key-height:72px;--black-width:30px}
+  .note-letter{font-size:1.1rem}
+  textarea#melody{font-size:1.4rem}
+}
 </style>
 </head>
 <body>
 <div class="app">
-<h1>Ksylofoni – kaksi oktaavia ja laululista</h1>
-<div class="xylophone" id="xylophone"><div class="key white" data-note="C" data-octave="4"><div class="note-letter">C</div><div class="note-oct">4</div><div class="key black" data-note="C#" data-octave="4"><div class="note-letter">C#</div><div class="note-oct">4</div></div></div><div class="key white" data-note="D" data-octave="4"><div class="note-letter">D</div><div class="note-oct">4</div><div class="key black" data-note="D#" data-octave="4"><div class="note-letter">D#</div><div class="note-oct">4</div></div></div><div class="key white" data-note="E" data-octave="4"><div class="note-letter">E</div><div class="note-oct">4</div></div><div class="key white" data-note="F" data-octave="4"><div class="note-letter">F</div><div class="note-oct">4</div><div class="key black" data-note="F#" data-octave="4"><div class="note-letter">F#</div><div class="note-oct">4</div></div></div><div class="key white" data-note="G" data-octave="4"><div class="note-letter">G</div><div class="note-oct">4</div><div class="key black" data-note="G#" data-octave="4"><div class="note-letter">G#</div><div class="note-oct">4</div></div></div><div class="key white" data-note="A" data-octave="4"><div class="note-letter">A</div><div class="note-oct">4</div><div class="key black" data-note="A#" data-octave="4"><div class="note-letter">A#</div><div class="note-oct">4</div></div></div><div class="key white" data-note="B" data-octave="4"><div class="note-letter">B</div><div class="note-oct">4</div></div><div class="key white" data-note="C" data-octave="5"><div class="note-letter">C</div><div class="note-oct">5</div><div class="key black" data-note="C#" data-octave="5"><div class="note-letter">C#</div><div class="note-oct">5</div></div></div><div class="key white" data-note="D" data-octave="5"><div class="note-letter">D</div><div class="note-oct">5</div><div class="key black" data-note="D#" data-octave="5"><div class="note-letter">D#</div><div class="note-oct">5</div></div></div><div class="key white" data-note="E" data-octave="5"><div class="note-letter">E</div><div class="note-oct">5</div></div><div class="key white" data-note="F" data-octave="5"><div class="note-letter">F</div><div class="note-oct">5</div><div class="key black" data-note="F#" data-octave="5"><div class="note-letter">F#</div><div class="note-oct">5</div></div></div><div class="key white" data-note="G" data-octave="5"><div class="note-letter">G</div><div class="note-oct">5</div><div class="key black" data-note="G#" data-octave="5"><div class="note-letter">G#</div><div class="note-oct">5</div></div></div><div class="key white" data-note="A" data-octave="5"><div class="note-letter">A</div><div class="note-oct">5</div><div class="key black" data-note="A#" data-octave="5"><div class="note-letter">A#</div><div class="note-oct">5</div></div></div><div class="key white" data-note="B" data-octave="5"><div class="note-letter">B</div><div class="note-oct">5</div></div></div>
-<div class="controls">
-<label for="melody">Sävelmä:</label>
-<textarea id="melody"></textarea>
-<div style="display:flex;align-items:center;gap:12px">
-<button id="startBtn">Aloita</button>
-<button id="stopBtn" style="background:#777">Lopeta</button>
-<button id="autoBtn" style="background:#4caf50">Soita automaattisesti</button>
-<span>Seuraava: <span id="nextNote">Valmis!</span></span>
+  <h1>Ksylofoni — xyo12 (3 oktaavia)</h1>
+
+  <div class="xyl-wrap">
+    <div id="xylophone" class="xylophone" aria-label="ksylofoni"></div>
+    <div id="nextArrow"></div>
+  </div>
+
+  <div class="controls">
+    <label for="melody">Sävelmä (nuottikirjaimet):</label>
+    <textarea id="melody" placeholder="Valitse laulu listasta tai kirjoita nuotit, esim. C4 D4 E4 ... (OK: C D E = oletusoktaavi 4)"></textarea>
+
+    <div class="row">
+      <button id="startBtn">Aloita</button>
+      <button id="stopBtn" class="secondary">Lopeta</button>
+      <button id="autoBtn" style="background:#4caf50">Soita automaattisesti</button>
+
+      <label for="soundSelect"><small class="hint">Ääniväri:</small></label>
+      <select id="soundSelect">
+        <option value="triangle">Kellomainen</option>
+        <option value="sine">Puinen</option>
+        <option value="square">Marimba</option>
+        <option value="sawtooth">Metallinen</option>
+      </select>
+
+      <span style="margin-left:8px">Seuraava: <strong id="nextNote">—</strong></span>
+    </div>
+
+    <div class="add-song">
+      <select id="songCategory">
+        <option value="kids">Lastenlaulu</option>
+        <option value="pop">Pop-laulu</option>
+      </select>
+      <input id="newSongName" placeholder="Laulun nimi">
+      <input id="newSongNotes" placeholder="Nuotit esim. C D E F ...">
+      <button id="addSongBtn">Lisää laulu</button>
+    </div>
+  </div>
+
+  <div class="song-lists">
+    <div class="song-list" id="kidsList">
+      <h3>Lastenlaulut</h3>
+      <ul></ul>
+    </div>
+    <div class="song-list" id="popList">
+      <h3>Pop-laulut</h3>
+      <ul></ul>
+    </div>
+  </div>
 </div>
-</div>
-<div class="song-lists">
-<div class="song-list" id="kidsList">
-<h3>Lastenlaulut</h3><ul><li>Tuiki tuiki tähtönen</li><li>Piippolan vaarilla</li><li>Pieni karhu</li><li>Hattara</li><li>Ukki aukki</li><li>Leijonakuningas</li><li>Satujen maa</li><li>Ritari Reki</li><li>Kultakutri</li><li>Hiiri hiiri</li></ul>
-</div>
-<div class="song-list" id="popList">
-<h3>Pop-laulut</h3><ul><li>Let It Be</li><li>Shape of You</li><li>Happy</li><li>Someone Like You</li><li>Rolling in the Deep</li><li>Bad Guy</li><li>Blinding Lights</li><li>Dance Monkey</li><li>Shallow</li></ul>
-</div>
-</div>
-</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  var audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-  var xylophone = document.getElementById('xylophone');
-  var keyElements = {};
-  var baseOctaves = [4,5];
-  var whiteNotes = ['C','D','E','F','G','A','B'];
-  var blackLayout = {'C':'C#','D':'D#','F':'F#','G':'G#','A':'A#'};
 
-  // Luo valkoiset koskettimet
-  baseOctaves.forEach(function(oct){
-    whiteNotes.forEach(function(letter){
+  // Audio + wave
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var currentWave = 'triangle';
+  document.getElementById('soundSelect').addEventListener('change', function(e){
+    currentWave = e.target.value;
+  });
+
+  // Elements
+  var xylophone = document.getElementById('xylophone');
+  var nextArrow = document.getElementById('nextArrow');
+  var nextNoteEl = document.getElementById('nextNote');
+  var keyElements = {}; // map 'C4' -> element
+
+  // 3 oktaavia: 4,5,6 (C4..B6)
+  var octaves = [4,5,6];
+  var whiteNames = ['C','D','E','F','G','A','B'];
+  var blackMap = {'C':'C#','D':'D#','F':'F#','G':'G#','A':'A#'};
+
+  // Create white keys for each octave in one long row
+  octaves.forEach(function(oct){
+    whiteNames.forEach(function(name){
       var key = document.createElement('div');
       key.className = 'key white';
-      key.dataset.note = letter;
+      key.dataset.note = name;
       key.dataset.octave = oct;
-      key.innerHTML = '<div class="note-letter">'+letter+'</div><div class="note-oct">'+oct+'</div>';
+      key.dataset.full = name + oct;
+      key.innerHTML = '<div class="note-letter">'+name+'</div><div class="note-oct">'+oct+'</div>';
       xylophone.appendChild(key);
-      keyElements[letter+oct] = key;
+      keyElements[name + oct] = key;
     });
   });
 
-  // Luo mustat koskettimet
-  baseOctaves.forEach(function(oct){
-    var whites = Array.from(xylophone.querySelectorAll('.white[data-octave="'+oct+'"]'));
-    whites.forEach(function(whiteKey){
-      var letter = whiteKey.dataset.note;
-      var blackName = blackLayout[letter];
+  // Add black keys inside corresponding white keys (absolute positioned)
+  // We must position black keys relative to their parent white key by CSS transform
+  octaves.forEach(function(oct){
+    // select white keys of this octave in DOM order
+    var whites = Array.from(xylophone.querySelectorAll('.white')).filter(function(el){ return parseInt(el.dataset.octave) === oct; });
+    whites.forEach(function(w, idx){
+      var name = w.dataset.note;
+      var blackName = blackMap[name];
       if(blackName){
         var black = document.createElement('div');
         black.className = 'key black';
         black.dataset.note = blackName;
         black.dataset.octave = oct;
-        black.innerHTML = '<div class="note-letter">'+blackName+'</div><div class="note-oct">'+oct+'</div>';
-        whiteKey.appendChild(black);
-        keyElements[blackName+oct] = black;
+        black.dataset.full = blackName + oct;
+        // smaller letter size for black keys
+        black.innerHTML = '<div style="font-weight:700;font-size:1.0rem">'+blackName+'</div><div style="font-size:0.7rem;opacity:0.7">'+oct+'</div>';
+        // append inside white: will be absolute
+        w.appendChild(black);
+        // position black: push slightly right
+        // compute left offset using CSS transform (we do this in JS to account for widths)
+        keyElements[blackName + oct] = black;
       }
     });
   });
 
-  function noteFreq(note,oct){
-    var letters = {'C':-9,'C#':-8,'D':-7,'D#':-6,'E':-5,'F':-4,'F#':-3,'G':-2,'G#':-1,'A':0,'A#':1,'B':2};
-    return 440*Math.pow(2,(letters[note]+(oct-4)*12)/12);
+  // After DOM created, position black keys horizontally on top of whites
+  function positionBlackKeys(){
+    // for each black key, position center between this white and next white
+    Object.keys(keyElements).forEach(function(k){
+      var el = keyElements[k];
+      if(!el) return;
+      if(el.classList.contains('black')){
+        var parent = el.parentElement; // white key parent
+        // place with left = parent.width*0.65 approximately
+        el.style.left = ( (parseFloat(getComputedStyle(parent).width) * 0.62) ) + 'px';
+      } else if(el.classList.contains('white')){
+        // ensure width consistent
+        el.style.width = getComputedStyle(el).minWidth || '';
+      }
+    });
   }
 
-  function playXylophoneTone(freq){
-    var now = audioCtx.currentTime;
-    var osc = audioCtx.createOscillator();
-    var gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.exponentialRampToValueAtTime(1, now+0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, now+0.5);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(now);
-    osc.stop(now+0.5);
+  // Call once and on resize
+  positionBlackKeys();
+  window.addEventListener('resize', positionBlackKeys);
+
+  // Frequency map
+  function freq(note, octave){
+    var map = {'C':-9,'C#':-8,'D':-7,'D#':-6,'E':-5,'F':-4,'F#':-3,'G':-2,'G#':-1,'A':0,'A#':1,'B':2};
+    if(!map.hasOwnProperty(note)) return NaN;
+    return 440 * Math.pow(2, (map[note] + (octave - 4) * 12) / 12);
   }
 
-  var lessonSeq=[],lessonIndex=0,awaitingPress=false;
-  var nextNoteEl=document.getElementById('nextNote');
-
-  function highlightKey(note,oct){
-    clearHighlights();
-    var el = keyElements[note+oct];
-    if(el){ el.classList.add('highlight'); }
+  // Play tone safely
+  function playTone(f){
+    if(!isFinite(f) || f <= 0) return;
+    var o = audioCtx.createOscillator();
+    var g = audioCtx.createGain();
+    try { o.type = currentWave || 'triangle'; } catch(e){ o.type = 'triangle'; }
+    o.frequency.setValueAtTime(f, audioCtx.currentTime);
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(1, audioCtx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.45);
   }
+
+  // Lesson state
+  var lessonSeq = [], lessonIndex = 0, awaitingPress = false;
 
   function clearHighlights(){
-    Object.values(keyElements).forEach(function(k){k.classList.remove('highlight','correct');});
+    Object.values(keyElements).forEach(function(k){ if(k) k.classList.remove('highlight','correct','auto'); });
+    hideArrow();
   }
 
   function parseMelody(text){
+    if(!text) return [];
     var tokens = text.replace(/,/g,' ').trim().split(/\s+/).filter(Boolean);
-    var seq = [];
-    tokens.forEach(function(t){
-      var m = t.match(/^([A-Ga-g](?:#)?)([0-9])?$/);
-      if(m){ seq.push({note:m[1].toUpperCase(),octave:m[2]?parseInt(m[2]):4}); }
-    });
-    return seq;
+    // if tokens use no octave (e.g. C D E), add default octave 4
+    var processed = tokens.map(function(t){
+      var m = t.match(/^([A-Ga-g]#?)([0-9])?$/);
+      if(!m) return null;
+      var note = m[1].toUpperCase();
+      var oct = m[2] ? parseInt(m[2]) : 4;
+      return {note: note, octave: oct};
+    }).filter(Boolean);
+    if(processed.length === 0) return [];
+    // repeat until 30
+    while(processed.length < 30){
+      processed = processed.concat(processed.slice(0, 30 - processed.length));
+    }
+    return processed.slice(0, 30);
   }
 
   function startLesson(){
-    var text = document.getElementById('melody').value;
-    lessonSeq = parseMelody(text);
-    if(!lessonSeq.length){ alert('Anna sävelmä.'); return; }
-    lessonIndex=0;
+    lessonSeq = parseMelody(document.getElementById('melody').value);
+    if(!lessonSeq.length){ alert('Anna sävelmä (nuottikirjaimet).'); return; }
+    lessonIndex = 0;
     nextStep();
   }
-
   function stopLesson(){
-    lessonSeq=[];lessonIndex=0;awaitingPress=false;nextNoteEl.textContent='—';clearHighlights();
+    lessonSeq = []; lessonIndex = 0; awaitingPress = false; nextNoteEl.textContent = '—'; clearHighlights();
   }
 
   function nextStep(){
-    if(lessonIndex>=lessonSeq.length){ nextNoteEl.textContent='Valmis!'; clearHighlights(); awaitingPress=false; return; }
+    if(lessonIndex >= lessonSeq.length){
+      nextNoteEl.textContent = 'Valmis!';
+      clearHighlights(); awaitingPress = false;
+      return;
+    }
     var t = lessonSeq[lessonIndex];
-    nextNoteEl.textContent = t.note+t.octave;
-    highlightKey(t.note,t.octave);
+    nextNoteEl.textContent = t.note + t.octave;
+    clearHighlights();
+    var el = keyElements[t.note + t.octave];
+    if(el) el.classList.add('highlight');
+    showArrowForKey(el);
     awaitingPress = true;
   }
 
-  function handleKeyPress(note,oct){
-    var el = keyElements[note+oct];
+  function handleKeyPress(note, octave){
+    var el = keyElements[note + octave];
     if(!el) return;
     el.classList.add('correct');
-    setTimeout(function(){el.classList.remove('correct');},200);
-    playXylophoneTone(noteFreq(note,oct));
+    setTimeout(function(){ el.classList.remove('correct'); }, 180);
+    var f = freq(note, octave);
+    playTone(f);
     if(awaitingPress){
       var target = lessonSeq[lessonIndex];
-      if(target && target.note===note && target.octave===oct){ lessonIndex++; awaitingPress=false; setTimeout(nextStep,250); }
+      if(target && target.note === note && target.octave === octave){
+        lessonIndex++; awaitingPress = false;
+        setTimeout(nextStep, 220);
+      } else {
+        // wrong press: give small feedback (shake)
+        var targetEl = keyElements[target.note + target.octave];
+        if(targetEl) targetEl.animate([{transform:'translateY(-4px)'},{transform:'translateY(0)'}],{duration:220});
+      }
     }
   }
 
+  // Attach pointer events (works for touch & mouse)
   Object.values(keyElements).forEach(function(k){
-    k.addEventListener('pointerdown',function(e){
+    if(!k) return;
+    k.addEventListener('pointerdown', function(e){
       e.preventDefault();
-      if(audioCtx.state==='suspended') audioCtx.resume();
-      handleKeyPress(k.dataset.note,parseInt(k.dataset.octave));
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      handleKeyPress(k.dataset.note, parseInt(k.dataset.octave));
     });
   });
 
-  window.addEventListener('keydown',function(e){
+  // keyboard A-G map -> default octave 4
+  window.addEventListener('keydown', function(e){
     var key = e.key.toUpperCase();
-    if(/[A-G]/.test(key)){ if(audioCtx.state==='suspended') audioCtx.resume(); handleKeyPress(key,4); }
+    if(/[A-G]/.test(key)){
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+      handleKeyPress(key, 4);
+    }
   });
 
-  document.getElementById('startBtn').addEventListener('click',function(){ if(audioCtx.state==='suspended') audioCtx.resume(); startLesson(); });
-  document.getElementById('stopBtn').addEventListener('click',stopLesson);
+  // Buttons
+  document.getElementById('startBtn').addEventListener('click', function(){ if(audioCtx.state === 'suspended') audioCtx.resume(); startLesson(); });
+  document.getElementById('stopBtn').addEventListener('click', stopLesson);
 
-  var kidsSongs=[
-    {name:'Tuiki tuiki tähtönen',notes:'C C G G A A G'},
-    {name:'Piippolan vaarilla',notes:'G G A G C B'},
-    {name:'Pieni karhu',notes:'C C D E E D C'},
-    {name:'Hattara',notes:'E D C D E E E'},
-    {name:'Ukki aukki',notes:'G A G F E D C'},
-    {name:'Leijonakuningas',notes:'C D E F G'},
-    {name:'Satujen maa',notes:'C E G C E G'},
-    {name:'Ritari Reki',notes:'G G F E D C'},
-    {name:'Kultakutri',notes:'C C D E F E D'},
-    {name:'Hiiri hiiri',notes:'E E F G G F E'}];
-  
+  // Song lists (initial)
+  var kidsSongs = [
+    {name:'Tuiki tuiki tähtönen', notes:'C C G G A A G'},
+    {name:'Piippolan vaarilla', notes:'G G A G C B'},
+    {name:'Pieni karhu', notes:'C C D E E D C'},
+    {name:'Hattara', notes:'E D C D E E E'},
+    {name:'Ukki aukki', notes:'G A G F E D C'},
+    {name:'Leijonakuningas', notes:'C D E F G'},
+    {name:'Satujen maa', notes:'C E G C E G'},
+    {name:'Ritari Reki', notes:'G G F E D C'},
+    {name:'Kultakutri', notes:'C C D E F E D'},
+    {name:'Hiiri hiiri', notes:'E E F G G F E'}
+  ];
+  var popSongs = [
+    {name:'Let It Be', notes:'C C G A F E D C'},
+    {name:'Shape of You', notes:'E E G A B C D E'},
+    {name:'Happy', notes:'C C D E F G A B'},
+    {name:'Someone Like You', notes:'A B C D E F G A'},
+    {name:'Rolling in the Deep', notes:'G G A B C D E'},
+    {name:'Bad Guy', notes:'C D E F G A B C'},
+    {name:'Blinding Lights', notes:'E F G A B C D E'},
+    {name:'Dance Monkey', notes:'C C D E F G A B'},
+    {name:'Shallow', notes:'G A B C D E F G'},
+    {name:'Perfect', notes:'C D E F G A B C'}
+  ];
 
-  var popSongs=[
-    {name:'Let It Be',notes:'C C G A F E D C'},
-    {name:'Shape of You',notes:'E E G A B C D E'},
-    {name:'Happy',notes:'C C D E F G A B'},
-    {name:'Someone Like You',notes:'A B C D E F G A'},
-    {name:'Rolling in the Deep',notes:'G G A B C D E'},
-    {name:'Bad Guy',notes:'C D E F G A B C'},
-    {name:'Blinding Lights',notes:'E F G A B C D E'},
-    {name:'Dance Monkey',notes:'C C D E F G A B'},
-    {name:'Shallow',notes:'G A B C D E F G'}
-	 ];
-
-function populateSongList(){const kidsUl=document.querySelector('#kidsList ul');kidsSongs.forEach(s=>{const li=document.createElement('li');li.textContent=s.name;li.addEventListener('click',()=>document.getElementById('melody').value=s.notes);kidsUl.appendChild(li);});const popUl=document.querySelector('#popList ul');popSongs.forEach(s=>{const li=document.createElement('li');li.textContent=s.name;li.addEventListener('click',()=>document.getElementById('melody').value=s.notes);popUl.appendChild(li);});}
-populateSongList();
-
-// Automaattinen soitto
-document.getElementById('autoBtn').addEventListener('click',async()=>{
-  const seq=parseMelody(document.getElementById('melody').value);
-  for(const noteObj of seq){
-    highlightKey(noteObj.note,noteObj.octave);
-    playXylophoneTone(noteFreq(noteObj.note,noteObj.octave));
-    await new Promise(r=>setTimeout(r,500));
+  function loopTo30(str){
+    var arr = str.replace(/,/g,' ').trim().split(/\s+/).filter(Boolean);
+    if(arr.length === 0) return '';
+    while(arr.length < 30) arr = arr.concat(arr.slice(0, 30 - arr.length));
+    return arr.slice(0,30).join(' ');
   }
-  clearHighlights();
-});
+
+  function populateLists(){
+    var kidsUl = document.querySelector('#kidsList ul');
+    var popUl = document.querySelector('#popList ul');
+    kidsUl.innerHTML = ''; popUl.innerHTML = '';
+    kidsSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = loopTo30(s.notes); });
+      kidsUl.appendChild(li);
+    });
+    popSongs.forEach(function(s){
+      var li = document.createElement('li');
+      li.textContent = s.name;
+      li.addEventListener('click', function(){ document.getElementById('melody').value = loopTo30(s.notes); });
+      popUl.appendChild(li);
+    });
+  }
+  populateLists();
+
+  // Add song
+  document.getElementById('addSongBtn').addEventListener('click', function(){
+    var name = document.getElementById('newSongName').value.trim();
+    var notes = document.getElementById('newSongNotes').value.trim();
+    var cat = document.getElementById('songCategory').value;
+    if(!name || !notes){ alert('Anna nimi ja nuotit'); return; }
+    var item = {name: name, notes: notes};
+    if(cat === 'kids') kidsSongs.push(item); else popSongs.push(item);
+    populateLists();
+    document.getElementById('newSongName').value = '';
+    document.getElementById('newSongNotes').value = '';
+  });
+
+  // Auto play with arrow & highlight, ensure resume
+  document.getElementById('autoBtn').addEventListener('click', async function(){
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+    var seq = parseMelody(document.getElementById('melody').value);
+    if(!seq.length){ alert('Anna sävelmä ennen automaattisoittoa.'); return; }
+    clearHighlights();
+    for(var i=0;i<seq.length;i++){
+      var n = seq[i];
+      var el = keyElements[n.note + n.octave];
+      if(el) el.classList.add('auto');
+      showArrowForKey(el);
+      var f = freq(n.note, n.octave);
+      if(isFinite(f) && f > 0) playTone(f);
+      await new Promise(function(r){ setTimeout(r, 520); });
+      if(el) el.classList.remove('auto');
+    }
+    clearHighlights();
+  });
+
+  // Arrow helper: position arrow centered under key element
+  function showArrowForKey(keyEl){
+    if(!keyEl){ hideArrow(); return; }
+    var wrapRect = xylophone.getBoundingClientRect();
+    var rect = keyEl.getBoundingClientRect();
+    // position arrow below key: compute center X, Y below wrap bottom
+    var centerX = rect.left + rect.width/2;
+    // place arrow such that its tip is slightly below the bottom of key
+    var arrowLeft = centerX - 12; // arrow width ~24
+    var arrowTop = rect.bottom + 6; // little gap
+    // convert to container coords (relative to document, nextArrow is absolute positioned in page)
+    nextArrow.style.left = (arrowLeft) + 'px';
+    nextArrow.style.top = (arrowTop) + 'px';
+    nextArrow.style.opacity = 1;
+  }
+  function hideArrow(){ nextArrow.style.opacity = 0; }
+
+  // initial small positioning update after fonts/sizes
+  setTimeout(positionBlackKeys, 80);
 
 });
 </script>
-
-
-</body></html>
+</body>
+</html>

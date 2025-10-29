@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ksylofoni – Lasten oppimissoitin</title>
+<style>
+body {
+  font-family: "Comic Sans MS", sans-serif;
+  background: #111;
+  color: #eee;
+  margin: 0;
+  padding: 10px;
+  text-align: center;
+}
+h1 { margin-bottom: 10px; color: #fff; }
+#xylophone { display: flex; align =  left; justify-content: flex-start; align-items: flex-end; position: relative; margin: 20px auto;   margin-left: 80px; touch-action: manipulation; }
+.white-key, .black-key { border: 1px solid #555; border-radius: 5px; margin: 0; position: relative; cursor: pointer; user-select: none; }
+.white-key { width: 35px; height: 160px; background: #eee; z-index: 1; display: flex; justify-content: center; align-items: flex-end; font-size: 12px; color: #222; margin-right: 2px; }
+.black-key { width: 24px; height: 100px; background: #333; position: absolute; top: 0; z-index: 2; }
+.playing { background: red !important; animation: blink 0.4s ease-in-out 2; }
+@keyframes blink { 50% { background-color: #ff4444; } }
+.okt-label { position: absolute; top: -20px; font-size: 14px; font-weight: bold; color: #fff; }
+#controls { margin-top: 10px; }
+button, select { margin: 5px; padding: 8px 12px; border-radius: 8px; border: none; background: #666; color: #fff; cursor: pointer; font-size: 14px; }
+button:hover, select:hover { background: #888; }
+#melody { margin: 10px auto;   margin-left: 80px; font-size: 26px; width: 70%; min-height: 40px; border: 2px solid #555; border-radius: 8px; padding: 5px; background: #222; color: #fff; overflow-x:auto; white-space:nowrap; }
+#song-lists { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
+.song-list { border: 1px solid #555; border-radius: 8px; padding: 5px; width: 220px; background: #222; }
+.song-list h3 { margin-top: 0; color: #fff; }
+.song-list div { cursor: pointer; margin: 2px 0; background: #333; border-radius: 4px; padding: 3px; color: #eee; }
+.song-list div:hover { background: #555; }
+</style>
+</head>
+<body>
+<h1>🎵 Ksylofoni – Lasten oppimissoitin</h1>
+
+<div id="xylophone"></div>
+<div id="melody"></div>
+
+<div id="controls">
+  <select id="waveType">
+    <option value="sine">Kellomainen</option>
+    <option value="square">Puinen</option>
+    <option value="triangle">Marimba</option>
+    <option value="sawtooth">Metallinen</option>
+  </select>
+  <button id="startBtn">Soita automaattisesti</button>
+  <button id="stopBtn">Lopeta</button>
+  <button id="teachBtn">Opetustila</button>
+  <button id="clearBtn">Tyhjennä nuotit</button>
+</div>
+
+<div id="song-lists">
+  <div class="song-list" id="childrenSongs">
+    <h3>Lastenlaulut</h3>
+  </div>
+  <div class="song-list" id="popSongs">
+    <h3>Pop-laulut</h3>
+  </div>
+</div>
+
+<script>
+const notes = ["C4","C#4","D4","D#4","E4","F4","F#4","G4","G#4","A4","A#4","B4","C5","C#5","D5","D#5","E5","F5","F#5","G5","G#5","A5","A#5","B5"];
+const freqMap = {
+  "C4":261.63,"C#4":277.18,"D4":293.66,"D#4":311.13,"E4":329.63,"F4":349.23,"F#4":369.99,"G4":392.00,"G#4":415.30,"A4":440.00,"A#4":466.16,"B4":493.88,
+  "C5":523.25,"C#5":554.37,"D5":587.33,"D#5":622.25,"E5":659.25,"F5":698.46,"F#5":739.99,"G5":783.99,"G#5":830.61,"A5":880.00,"A#5":932.33,"B5":987.77
+};
+const xylophone = document.getElementById("xylophone");
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let isPlaying = false, teachMode = false, melody = [], currentNoteIndex = 0, waveType = "sine";
+
+// Oktaavinumerot
+const okt4Label = document.createElement("div");
+okt4Label.classList.add("okt-label");
+okt4Label.textContent = "4. okt.";
+xylophone.appendChild(okt4Label);
+const okt5Label = document.createElement("div");
+okt5Label.classList.add("okt-label");
+okt5Label.textContent = "5. okt.";
+xylophone.appendChild(okt5Label);
+
+function createKeys() {
+  xylophone.innerHTML = "";
+  xylophone.appendChild(okt4Label);
+  xylophone.appendChild(okt5Label);
+  notes.forEach(note => {
+    const isSharp = note.includes("#");
+    const key = document.createElement("div");
+    key.classList.add(isSharp ? "black-key" : "white-key");
+    key.dataset.note = note;
+    if (!isSharp) key.textContent = note.replace(/[0-9]/g,"");
+    key.addEventListener("mousedown",()=>playTone(note));
+    key.addEventListener("touchstart", e=>{e.preventDefault();playTone(note);});
+    xylophone.appendChild(key);
+  });
+  // mustat oikeille kohdille
+  const whiteKeys = Array.from(document.querySelectorAll(".white-key"));
+  const blackKeys = Array.from(document.querySelectorAll(".black-key"));
+  const positions = [0,1,3,4,5,7,8,10,11,12,14,15];
+  blackKeys.forEach((bk,i)=>{
+    bk.style.left = (whiteKeys[positions[i]]?.offsetLeft || (i*35)) + 25 + "px";
+  });
+  // oktaavilabelit
+  okt4Label.style.left = "0px";
+  okt5Label.style.left = whiteKeys[12]?.offsetLeft + "px";
+}
+
+function playTone(note) {
+  if(!freqMap[note]) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = waveType;
+  osc.frequency.value = freqMap[note];
+  gain.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.6);
+  // korosta kosketin
+  const key = [...document.querySelectorAll("[data-note]")].find(k=>k.dataset.note===note);
+  if(key){key.classList.add("playing"); setTimeout(()=>key.classList.remove("playing"),400);}
+  // opetustila
+  if(teachMode && note===melody[currentNoteIndex]){
+    currentNoteIndex++;
+    if(currentNoteIndex<melody.length) highlightNext();
+    else teachMode=false;
+  }
+}
+
+function highlightNext(){
+  document.querySelectorAll(".white-key,.black-key").forEach(k=>k.style.outline="");
+  const next = document.querySelector(`[data-note='${melody[currentNoteIndex]}']`);
+  if(next) next.style.outline="3px solid red";
+}
+
+function playMelodyAuto(){
+  if(isPlaying || melody.length===0) return;
+  isPlaying=true; currentNoteIndex=0;
+  const playNext = ()=>{
+    if(!isPlaying || currentNoteIndex>=melody.length){isPlaying=false; return;}
+    playTone(melody[currentNoteIndex]);
+    currentNoteIndex++;
+    setTimeout(playNext,1000); // 1 sek per nuotti
+  };
+  playNext();
+}
+
+function stopMelody(){isPlaying=false; teachMode=false; document.querySelectorAll(".white-key,.black-key").forEach(k=>k.style.outline="");}
+function startTeach(){if(melody.length===0) return; teachMode=true; currentNoteIndex=0; highlightNext();}
+function clearMelody(){melody=[]; document.getElementById("melody").textContent="";}
+
+document.getElementById("waveType").onchange = e=>waveType=e.target.value;
+document.getElementById("startBtn").onclick=playMelodyAuto;
+document.getElementById("stopBtn").onclick=stopMelody;
+document.getElementById("teachBtn").onclick=startTeach;
+document.getElementById("clearBtn").onclick=clearMelody;
+
+// näppäimistösoitto
+const keyMap = { "a":"C4","w":"C#4","s":"D4","e":"D#4","d":"E4","f":"F4","t":"F#4","g":"G4","y":"G#4","h":"A4","u":"A#4","j":"B4","k":"C5","o":"C#5","l":"D5","p":"D#5",";":"E5","'":"F5"};
+document.addEventListener("keydown",e=>{
+  let n=keyMap[e.key.toLowerCase()];
+  if(!n) return;
+  if(e.shiftKey && n.endsWith("4")) n=n.replace("4","5");
+  playTone(n);
+});
+
+// Laulut (20 lasten, 20 pop), 20 nuottia per kappale
+const childrenSongs = {
+  "Autolla ajetaan varo-varovasti": "C4 C4 D4 E4 F4 F4 E4 D4 C4 G4 G4 A4 G4 F4 E4 D4 C4",
+  "Bussilaulu": "C4 D4 E4 F4 G4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4",
+  "Elefanttimarssi": "C4 C4 D4 E4 F4 G4 G4 A4 G4 F4 E4 D4 C4 C4 D4 E4 F4",
+  "Hepokatti": "C4 D4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Hämä-hämähäkki": "C4 C4 D4 E4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Jos sull lysti on": "C4 C4 D4 C4 C4 D4 C4 E4 E4 D4 C4 D4 C4 C4",
+  "Jänis istui maassa": "C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Karhunpoika sairastaa": "C4 D4 E4 F4 G4 G4 F4 E4 D4 C4 C4 D4 E4 F4 G4 G4",
+  "Känkkäränkkä": "C4 D4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Peppi Pitkätossu": "C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Pienen pieni veturi": "C4 C4 D4 E4 F4 F4 G4 G4 A4 G4 F4 E4 D4 C4 C4",
+  "Pienet sammakot": "C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Pieni ankanpoikanen": "C4 D4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Piippolan vaari": "C4 D4 E4 C4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Pikkupoika posteljooni": "C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Popsi popsi porkkanaa": "C4 D4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4"
+};
+
+const popSongs = {
+  "Imagine":"C4 C4 D4 E4 G4 G4 F4 E4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Yesterday":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Let It Be":"C4 E4 G4 F4 E4 D4 C4 D4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "We Will Rock You":"C4 C4 C4 F4 G4 F4 E4 D4 C4 C4 F4 G4 F4 E4 D4",
+  "Shape of You":"C4 D4 E4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Happy":"C4 D4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Hey Jude":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "All of Me":"C4 E4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4",
+  "Viva La Vida":"C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4",
+  "Perfect":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Someone Like You":"C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4",
+  "Believer":"C4 D4 E4 F4 G4 G4 F4 E4 D4 C4",
+  "Shallow":"C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4",
+  "Counting Stars":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4",
+  "Let It Go":"C4 D4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Senorita":"C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4",
+  "Blinding Lights":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Stay":"C4 D4 E4 F4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4",
+  "Havana":"C4 D4 F4 G4 A4 G4 F4 E4 D4 C4",
+  "Levitating":"C4 D4 E4 F4 G4 A4 G4 F4 E4 D4 C4 D4 E4 F4 G4 A4"
+};
+
+// Lisää listat
+const childrenDiv = document.getElementById("childrenSongs");
+for(let song in childrenSongs){
+  const d = document.createElement("div"); d.textContent = song;
+  d.onclick = ()=>{ melody = childrenSongs[song].split(" "); document.getElementById("melody").textContent=childrenSongs[song];};
+  childrenDiv.appendChild(d);
+}
+const popDiv = document.getElementById("popSongs");
+for(let song in popSongs){
+  const d = document.createElement("div"); d.textContent = song;
+  d.onclick = ()=>{ melody = popSongs[song].split(" "); document.getElementById("melody").textContent=popSongs[song];};
+  popDiv.appendChild(d);
+}
+
+createKeys();
+</script>
+</body>
+</html>
